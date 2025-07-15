@@ -1,17 +1,6 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-test_*.py
-test.py
 
-
-# Virtual environments
-.venv
-.vscode
-
-venv-DrissionPageMCP/
+# IDE configuration
 .idea/
+
+# Test artifacts
+*.png
