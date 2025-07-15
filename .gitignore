@@ -8,8 +8,10 @@ wheels/
 test_*.py
 test.py
 
+
 # Virtual environments
 .venv
 .vscode
 
 venv-DrissionPageMCP/
+.idea/
