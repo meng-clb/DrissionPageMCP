@@ -65,7 +65,9 @@ class DrissionPageMCP:
     # --- 浏览器管理 ---
 
     async def get_version(self) -> dict:
-        """获取此 MCP 工具的版本号。"""
+        """获取此 MCP 工具的版本号。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         return success("1.1.0-refactored-zh")
 
     async def connect_or_open_browser(self, debug_port: int = 9222, browser_path: str = None, headless: bool = False) -> dict:
@@ -76,14 +78,15 @@ class DrissionPageMCP:
         :param browser_path: 浏览器可执行文件的路径。
         :param headless: 是否以无头模式运行。
         :return: 包含浏览器信息的字典。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。
         """
         try:
             co = ChromiumOptions()
             co.set_local_port(debug_port)
             if browser_path:
                 co.set_browser_path(browser_path)
-            if headless:
-                co.headless(True)
+            co.headless(headless)
             
             self.browser = await run_sync(Chromium, co)
             tab = self.latest_tab
@@ -97,7 +100,9 @@ class DrissionPageMCP:
             return error(f"连接或打开浏览器失败：{e}")
 
     async def new_tab(self, url: str) -> dict:
-        """打开一个新标签页并导航到指定的 URL。"""
+        """打开一个新标签页并导航到指定的 URL。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         try:
             tab = await run_sync(self.latest_tab.new_tab, url)
             return success({"title": tab.title, "tab_id": tab.tab_id, "url": tab.url})
@@ -105,7 +110,9 @@ class DrissionPageMCP:
             return error(f"打开新标签页失败：{e}")
 
     async def get_page(self, url: str) -> dict:
-        """将当前标签页导航到一个新的 URL。"""
+        """将当前标签页导航到一个新的 URL。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         try:
             await run_sync(self.latest_tab.get, url)
             tab = self.latest_tab
@@ -114,7 +121,9 @@ class DrissionPageMCP:
             return error(f"导航到 URL 失败：{e}")
 
     async def wait(self, seconds: int) -> dict:
-        """等待指定的秒数。"""
+        """等待指定的秒数。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         try:
             await asyncio.sleep(seconds)
             return success(f"已等待 {seconds} 秒。")
@@ -129,6 +138,8 @@ class DrissionPageMCP:
         
         :param locator: DrissionPage 定位器字符串 (例如, 'tag:div', '#id', '.class', 'text:content')。
         :return: 包含元素信息的字典列表。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。
         """
         try:
             elements = await run_sync(self.latest_tab.eles, locator)
@@ -147,6 +158,8 @@ class DrissionPageMCP:
         :param locator: 用于查找元素的定位器字符串。
         :param index: 如果找到多个元素，要点击的元素的索引。
         :return: 成功或失败的字典。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。
         """
         try:
             elements = await run_sync(self.latest_tab.eles, locator)
@@ -169,6 +182,8 @@ class DrissionPageMCP:
         :param index: 如果找到多个元素，要操作的元素的索引。
         :param clear: 输入前是否清除输入框。
         :return: 成功或失败的字典。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。
         """
         try:
             elements = await run_sync(self.latest_tab.eles, locator)
@@ -183,7 +198,9 @@ class DrissionPageMCP:
             return error(f"向定位器为 '{locator}' 的元素输入文本失败：{e}")
 
     async def send_key(self, key: Literal[tuple(KEY_MAPPING.keys())]) -> dict:
-        """向当前标签页发送一个特殊的按键。"""
+        """向当前标签页发送一个特殊的按键。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         if key not in KEY_MAPPING:
             return error(f"无效的按键 '{key}'。可用按键: {list(KEY_MAPPING.keys())}")
         try:
@@ -195,7 +212,9 @@ class DrissionPageMCP:
     # --- 数据提取与页面信息 ---
 
     async def get_page_info(self) -> dict:
-        """返回当前标签页的信息 (URL, 标题等)。"""
+        """返回当前标签页的信息 (URL, 标题等)。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         try:
             tab = self.latest_tab
             info = {"url": tab.url, "title": tab.title, "id": tab.tab_id}
@@ -204,7 +223,9 @@ class DrissionPageMCP:
             return error(f"获取页面信息失败：{e}")
 
     async def get_body_text(self) -> dict:
-        """获取整个页面 body 的文本内容。"""
+        """获取整个页面 body 的文本内容。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         try:
             text = await run_sync(self.latest_tab.ele, 't:body').text
             return success(text)
@@ -212,7 +233,9 @@ class DrissionPageMCP:
             return error(f"获取 body 文本失败：{e}")
 
     async def get_simplified_dom_tree(self) -> dict:
-        """返回 DOM 树的简化 JSON 表示。"""
+        """返回 DOM 树的简化 JSON 表示。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         try:
             dom_tree = await run_sync(self.latest_tab.run_js, domTreeToJson)
             return success(dom_tree)
@@ -225,6 +248,8 @@ class DrissionPageMCP:
         
         :param as_file_path: 如果提供，则将屏幕截图保存到此路径。否则，返回字节流。
         :return: 包含文件路径的字典或 Image 对象。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。
         """
         try:
             if as_file_path:
@@ -239,7 +264,9 @@ class DrissionPageMCP:
     # --- 高级功能 & CDP ---
 
     async def run_js(self, js_code: str) -> dict:
-        """在当前标签页上执行 JavaScript 代码。"""
+        """在当前标签页上执行 JavaScript 代码。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         try:
             result = await run_sync(self.latest_tab.run_js, js_code)
             return success(result)
@@ -247,7 +274,9 @@ class DrissionPageMCP:
             return error(f"JavaScript 执行失败：{e}")
 
     async def run_cdp(self, cmd: str, **cmd_args) -> dict:
-        """执行一个原始的 Chrome DevTools Protocol 命令。"""
+        """执行一个原始的 Chrome DevTools Protocol 命令。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         try:
             result = await run_sync(self.latest_tab.run_cdp, cmd, **cmd_args)
             return success(result)
@@ -257,7 +286,9 @@ class DrissionPageMCP:
     # --- 文件处理 ---
 
     async def download_file(self, url: str, path: str, rename: str = None) -> dict:
-        """从 URL 下载文件。"""
+        """从 URL 下载文件。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         try:
             result = await run_sync(self.latest_tab.download, file_url=url, save_path=path, rename=rename)
             return success({"download_result": str(result)})
@@ -265,7 +296,9 @@ class DrissionPageMCP:
             return error(f"文件下载失败：{e}")
 
     async def upload_file(self, locator: str, file_path: str, index: int = 0) -> dict:
-        """通过与文件输入元素交互来上传文件。"""
+        """通过与文件输入元素交互来上传文件。
+
+        注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。"""
         try:
             elements = await run_sync(self.latest_tab.eles, locator)
             if not elements:
@@ -279,6 +312,18 @@ class DrissionPageMCP:
             return success(f"文件 '{file_path}' 已上传到定位器为 '{locator}' 的元素。")
         except Exception as e:
             return error(f"文件上传失败：{e}")
+
+    async def close_browser(self) -> dict:
+        """关闭浏览器实例。"""
+        try:
+            if self.browser:
+                await run_sync(self.browser.close)
+                self.browser = None
+                return success("浏览器已成功关闭。")
+            else:
+                return success("浏览器未连接，无需关闭。")
+        except Exception as e:
+            return error(f"关闭浏览器失败：{e}")
 
 
 # --- MCP 服务器设置 ---
@@ -298,34 +343,39 @@ def register_tools():
                 doc += '\n\n注意：返回一个标准的 JSON 对象：{"success": true/false, "data": ..., "error": "..."}。'
             
             # We need to bind the method to the instance `controller`
+            # We need to bind the method to the instance `controller`
             bound_method = getattr(controller, name)
             mcp.add_tool(fn=bound_method, name=name, description=doc)
 
     # 手动添加来自其他模块的工具
-    async def save_to_db_async(data, db_path='data.db', table_name='my_table'):
+    async def save_to_db_async(data, db_path='data.db', table_name='my_table', append=False):
         try:
-            result = await run_sync(save_dict_to_sqlite, data, db_path, table_name)
+            result = await run_sync(save_dict_to_sqlite, data, db_path, table_name, append)
             return success(result)
         except Exception as e:
-            return error(f"保存到数��库失败：{e}")
+            return error(f"保存到数据库失败：{e}")
             
     mcp.add_tool(
         fn=save_to_db_async,
         name="save_data_to_sqlite",
-        description="将字典或字典列表保存到 SQLite 数据库表中。"
+        description="将字典或字典列表保存到 SQLite 数据库表中。可以指定 `append=True` 来追加数据。"
     )
 
 def main():
     """初始化并运行 MCP 服务器。"""
     print("正在初始化 DrissionPage MCP 服务器...")
-    register_tools()
-    
-    # To get the list of tools, we need to run the async function separately
-    tool_list = asyncio.run(mcp.list_tools())
+
+    async def setup_and_list_tools():
+        """在一个临时事件循环中注册并列出工具。"""
+        register_tools()
+        return await mcp.list_tools()
+
+    # 在单独的事件循环中运行设置函数
+    tool_list = asyncio.run(setup_and_list_tools())
     print(f"已注册 {len(tool_list)} 个工具。")
     
     print("DrissionPage MCP 服务器正在运行...")
-    # mcp.run is a blocking call that manages its own event loop
+    # mcp.run 是一个阻塞调用，它管理自己的事件循环
     mcp.run(transport='stdio')
 
 if __name__ == "__main__":
