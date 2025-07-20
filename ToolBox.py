@@ -32,7 +32,7 @@ def save_dict_to_sqlite(data, db_path='data.db', table_name='my_table', append=F
     # 提取列名（以第一个字典为准）
     columns = list(data[0].keys())
     
-    # 连���到数据库
+    # 连接到数据库
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
 
@@ -67,3 +67,31 @@ def save_dict_to_sqlite(data, db_path='data.db', table_name='my_table', append=F
         conn.commit()
 
     return f"{action_message} {db_path} 的表 {table_name} 中。"
+
+def get_element_in_iframe(tab, iframe_locator, element_locator):
+    """
+    获取跨域 iframe 内的元素。
+
+    :param tab: DrissionPage 的 Tab 对象。
+    :param iframe_locator: 用于定位 iframe 的定位符字符串。
+    :param element_locator: 用于在 iframe 内部定位目标元素的定位符字符串。
+    :return: 如果找到，返回 ChromiumElement 对象；否则返回 None。
+    """
+    print(f"开始查找 iframe，使用定位符: {iframe_locator}")
+    iframe = tab.get_frame(iframe_locator)
+
+    if not iframe:
+        print(f"错误：无法找到 iframe。")
+        return None
+
+    print(f"成功找到 iframe (src: {iframe.attr('src')})。")
+    print(f"开始在 iframe 内查找元素，使用定位符: {element_locator}")
+    
+    element = iframe.ele(element_locator)
+
+    if not element:
+        print(f"错误：在 iframe 内无法找到元素。")
+        return None
+        
+    print("成功在 iframe 内找到元素。")
+    return element
