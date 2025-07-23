@@ -1,67 +1,77 @@
-function isVisuallyHidden(node) {
-  if (!(node instanceof Element)) return true;
-
-  const invisibleTags = ['script', 'style', 'meta', 'link', 'template', 'noscript'];
-  const tagName = node.nodeName.toLowerCase();
-
-  if (invisibleTags.includes(tagName)) return true;
-
-  const style = getComputedStyle(node);
-  const hiddenByStyle = (
-    style.display === 'none' ||
-    style.visibility === 'hidden' ||
-    style.opacity === '0'
-  );
-
-  const hasNoSize = node.offsetWidth === 0 && node.offsetHeight === 0;
-
-  return hiddenByStyle || hasNoSize;
-}
-
-function domTreeToJson(node = document.body, tagCounters = {}) {
-  const getNodeLabel = (node) => {
-    let name = node.nodeName.toLowerCase();
-    if (node.id) name += `#${node.id}`;
-    if (node.className && typeof node.className === 'string') {
-      const classList = node.className.trim().split(/\s+/).join('.');
-      if (classList) name += `.${classList}`;
+// --- 新增的辅助函数 ---
+function getXPath(node) {
+    // 1. 如果元素有ID，直接使用ID，这是最稳定的
+    if (node.id) {
+        return `//*[@id="${node.id}"]`;
     }
-    const text = node.textContent?.trim().replace(/\s+/g, ' ') || '';
-    const content = text ? ` content='${text.slice(0, 5)}${text.length > 5 ? "…" : ""}'` : '';
-    return `${name}/` + content;
-  };
 
-  if (isVisuallyHidden(node)) {
-    return {}; // 过滤不可见节点
-  }
+    // 2. 如果没有ID，递归构建XPath
+    if (node === document.body) {
+        return '/html/body';
+    }
+    if (node.parentNode === null) {
+        return '';
+    }
 
-  const tagName = node.nodeName.toLowerCase();
-  tagCounters[tagName] = (tagCounters[tagName] || 0);
-  const nodeKey = `${tagName}${tagCounters[tagName]++}`;
-
-  const children = Array.from(node.children)
-    .map(child => domTreeToJson(child, tagCounters))
-    .filter(childJson => Object.keys(childJson).length > 0); // 去掉空节点
-
-  if (children.length === 0) {
-    return { [nodeKey]: getNodeLabel(node) };
-  } else {
-    const childJson = {};
-    children.forEach(child => Object.assign(childJson, child));
-    return { [nodeKey]: childJson };
-  }
+    let ix = 0;
+    const siblings = node.parentNode.childNodes;
+    for (let i = 0; i < siblings.length; i++) {
+        const sibling = siblings[i];
+        if (sibling === node) {
+            // 构建路径：父级XPath + / + 当前标签名[索引]
+            // 索引从1开始
+            return getXPath(node.parentNode) + '/' + node.tagName.toLowerCase() + '[' + (ix + 1) + ']';
+        }
+        // 只计算相同标签的元素节点
+        if (sibling.nodeType === 1 && sibling.tagName === node.tagName) {
+            ix++;
+        }
+    }
+    return ''; // Should not happen
 }
 
-function buildDomJsonTree(root = document.body) {
-  const topTag = root.nodeName.toLowerCase();
-  const result = {};
-  result[topTag] = domTreeToJson(root);
-  return result;
+
+// --- 修改原有的函数 ---
+function buildSimplifiedDom(node, counters) {
+    if (node.nodeType !== 1 || !node.tagName) { // Only process element nodes
+        return null;
+    }
+
+    const tagName = node.tagName.toLowerCase();
+    
+    if (['script', 'style', 'meta', 'link', 'head'].includes(tagName)) {
+        return null;
+    }
+
+    if (counters[tagName] === undefined) {
+        counters[tagName] = 0;
+    }
+    const nodeId = `${tagName}${counters[tagName]++}`;
+
+    const result = {};
+    // 修改这里，让每个节点不仅是一个空对象，而是包含xpath属性
+    result[nodeId] = {
+        "xpath": getXPath(node) // <--- 关键改动：添加xpath
+    };
+
+    const childrenParent = node.shadowRoot || node;
+    const children = Array.from(childrenParent.children);
+    if (children.length > 0) {
+        children.forEach(child => {
+            const childJson = buildSimplifiedDom(child, counters);
+            if (childJson) {
+                Object.assign(result[nodeId], childJson);
+            }
+        });
+    }
+
+    return result;
 }
 
-// 用法示例
-const domJson = buildDomJsonTree();
+function getPageStructure() {
+    const counters = {};
+    const bodyJson = buildSimplifiedDom(document.body, counters);
+    return JSON.stringify({ "body": bodyJson }, null, 2);
+}
 
-// console.log(domJson)
-//console.log(JSON.stringify(domJson, null, 2));
-return JSON.stringify(domJson, null, 2)
+return getPageStructure();

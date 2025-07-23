@@ -4,3 +4,23 @@
 
 # Test artifacts
 *.png
+
+# IDE and system files
+.DS_Store
+.idea/
+.aiflow/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Project-specific ignores
+DrissionPage/
+DrissionPageDocsMD4.1.0.18/
+drissionpage_docs.md
+input.txt
+merged_iframes.md
+patient_info_summary.md
+test.html
+test.json
+

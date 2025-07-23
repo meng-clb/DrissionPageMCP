@@ -3,6 +3,7 @@
 
 import asyncio
 import inspect
+import os
 from typing import Any, Literal
 
 from DrissionPage import Chromium, ChromiumOptions
@@ -201,8 +202,8 @@ class DrissionPageMCP:
 
     async def get_elements(self, locator: str, context_name: str = 'main') -> dict:
         """
-        在指定的上下文中，使用 DrissionPage 定位器查找元素。
-        
+        在指定的上下文中，使用 DrissionPage 定位器查找一个或多个元素，并返回其结构化信息。
+        这是获取元素文本和属性的首选“勘探”工具。
         :param locator: DrissionPage 定位器字符串。
         :param context_name: 要在其中查找元素的上下文名称。
         :return: 包含元素信息的字典列表。
@@ -211,13 +212,21 @@ class DrissionPageMCP:
             context = self.get_context(context_name)
             elements = await run_sync(context.eles, locator)
             result = []
-            for el in elements:
-                element_info = {"tag": el.tag, "html": el.inner_html}
-                try:
-                    element_info["text"] = el.text
-                except AttributeError:
-                    element_info["text"] = None
-                result.append(element_info)
+            for i, el in enumerate(elements):
+                # 对所有元素返回结构化数据，对 iframe 进行特殊处理以确保安全
+                if getattr(el, 'tag', '').lower() in ['iframe', 'frame']:
+                    result.append({
+                        "tag": el.tag,
+                        "text": None,
+                        "attributes": await run_sync(getattr, el, 'attrs'),
+                        "context_locator": f"tag:{el.tag}@@{i}"
+                    })
+                else:
+                    result.append({
+                        "tag": el.tag,
+                        "text": await run_sync(getattr, el, 'text'),
+                        "attributes": await run_sync(getattr, el, 'attrs')
+                    })
             return success(result)
         except Exception as e:
             return error(f"在上下文 '{context_name}' 中使用定位器 '{locator}' 获取元素失败：{e}")
@@ -305,31 +314,103 @@ class DrissionPageMCP:
 
     async def get_body_text(self, context_name: str = 'main') -> dict:
         """
-        获取指定上下文整个 body 的文本内容。
+        获取指定上下文整个 body 的文本内容。这是“速读”整个页面文本的工具。
         
         :param context_name: 要获取 body 文本的上下文名称。
         :return: 包含 body 文本的字典。
         """
         try:
             context = self.get_context(context_name)
-            text = await run_sync(context.ele, 't:body').text
+            # DrissionPage 的 .text 在 body 元素上可能不是递归的，使用 JS 更可靠
+            text = await run_sync(context.run_js, "return document.body.innerText;")
             return success(text)
         except Exception as e:
             return error(f"获取上下文 '{context_name}' 的 body 文本失败：{e}")
 
-    async def get_simplified_dom_tree(self, context_name: str = 'main') -> dict:
+    async def get_page_structure(self, context_name: str = 'main') -> dict:
         """
-        返回指定上下文 DOM 树的简化 JSON 表示。
-        
-        :param context_name: 要获取 DOM 树的上下文名称。
-        :return: 包含 DOM 树的字典。
+        获取页面的完整、极致简化的结构，递归地包含所有 iframe 和 shadow DOM (wujie) 的内容。
+        这是理解页面布局的唯一且首选的工具。
+        :param context_name: 起始上下文的名称，通常是 'main'。
+        :return: 包含整个页面简化结构的字典。
+        """
+        # 获取主上下文
+        try:
+            main_context = self.get_context(context_name)
+        except Exception as e:
+            return error(f"获取上下文失败: {e}")
+
+        # 递归函数，用于获取简化的 DOM
+        async def _get_simplified_dom_recursive(context, current_context_name):
+            # 1. 获取当前上下文的简化 DOM
+            dom_data = None
+            try:
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                js_file_path = os.path.join(script_dir, 'domTreeToJSON.js')
+                with open(js_file_path, 'r', encoding='utf-8') as f:
+                    js_code = f.read()
+                if hasattr(context, 'run_js'):
+                    dom_data = await run_sync(context.run_js, js_code)
+                else:
+                    return {"error": "当前上下文不支持执行JavaScript。"}
+            except Exception as e:
+                return {"error": f"执行JS以获取简化DOM时出错: {e}"}
+
+            # 2. 查找并递归处理当前上下文中的所有 iframe
+            iframe_structures = []
+            try:
+                iframes = await run_sync(context.eles, 'tag:iframe')
+                if iframes:
+                    for i, iframe_ele in enumerate(iframes):
+                        iframe_context_name = f"{current_context_name}_iframe_{i}"
+                        self.contexts[iframe_context_name] = iframe_ele
+                        
+                        iframe_content = await _get_simplified_dom_recursive(iframe_ele, iframe_context_name)
+                        iframe_structures.append({
+                            "context_name": iframe_context_name,
+                            "structure": iframe_content
+                        })
+            except Exception as e:
+                 iframe_structures.append({"error": f"查找或处理iframes时出错: {e}"})
+            
+            return {
+                "dom": dom_data,
+                "iframes": iframe_structures
+            }
+
+        try:
+            structure = await _get_simplified_dom_recursive(main_context, context_name)
+            return success(structure)
+        except Exception as e:
+            return error(f"执行 get_page_structure 时出错: {e}")
+
+    async def get_full_html(self, locator: str = None, context_name: str = 'main', output_file: str = None) -> dict:
+        """
+        返回指定上下文或 locator 指定的元素的完整 HTML。
+        如果提供了 output_file，则将 HTML 保存到该文件，否则返回文本。
+        :param locator: 可选，目标元素的定位器字符串。
+        :param context_name: 如果未提供 locator，则使用此上下文名称。
+        :param output_file: 可选，将 HTML 内容保存到的文件路径。
+        :return: 包含完整 HTML 或文件路径的字典。
         """
         try:
-            context = self.get_context(context_name)
-            dom_tree = await run_sync(context.run_js, domTreeToJson)
-            return success(dom_tree)
+            target_context = self.get_context(context_name)
+            if locator:
+                target_element = await run_sync(target_context.ele, locator)
+                if not target_element:
+                    return error(f"在上下文 '{context_name}' 中未找到定位器为 '{locator}' 的元素。")
+                html_content = await run_sync(getattr, target_element, 'html')
+            else:
+                html_content = await run_sync(getattr, target_context, 'html')
+            
+            if output_file:
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    f.write(html_content)
+                return success({"message": f"HTML 内容已成功保存到 '{output_file}'。", "file_path": output_file})
+            else:
+                return success(html_content)
         except Exception as e:
-            return error(f"获取上下文 '{context_name}' 的简化 DOM 树失败：{e}")
+            return error(f"执行 get_full_html 时出错: {e}")
 
     async def get_screenshot(self, as_file_path: str = None, context_name: str = 'main') -> Any:
         """
